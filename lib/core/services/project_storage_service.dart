@@ -151,11 +151,7 @@ class ProjectStorageService {
       });
     } catch (e) {
       if (context.mounted) {
-        AppMessage.error(
-          context,
-          title: 'فشل الحفظ',
-          message: 'فشل حفظ الملف:',
-        );
+        AppMessage.error(context, title: 'فشل الحفظ', message: 'فشل حفظ الملف');
       }
     }
   }

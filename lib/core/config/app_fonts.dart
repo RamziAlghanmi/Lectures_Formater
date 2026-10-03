@@ -60,6 +60,22 @@ class AppFonts {
   );
 
   // ============================================================
+  // NotoNaskhArabic
+  // ============================================================
+
+  static const notoNaskhArabic = AppFontFamily(
+    name: 'NotoNaskhArabic',
+    displayName: 'Noto',
+
+    weights: {
+      400: 'assets/fonts/Noto_Naskh_Arabic/NotoNaskhArabic-Regular.ttf',
+      500: 'assets/fonts/Noto_Naskh_Arabic/NotoNaskhArabic-Medium.ttf',
+      600: 'assets/fonts/Noto_Naskh_Arabic/NotoNaskhArabic-SemiBold.ttf',
+      700: 'assets/fonts/Noto_Naskh_Arabic/NotoNaskhArabic-Bold.ttf',
+    },
+  );
+
+  // ============================================================
   // Tajawal
   // ============================================================
 
@@ -96,7 +112,12 @@ class AppFonts {
   // جميع العائلات
   // ============================================================
 
-  static const List<AppFontFamily> all = [cairo, tajawal, amiri];
+  static const List<AppFontFamily> all = [
+    cairo,
+    notoNaskhArabic,
+    amiri,
+    tajawal,
+  ];
 
   // ============================================================
   // البحث عن عائلة

@@ -25,18 +25,7 @@ class EditorScreen extends StatelessWidget {
       textDirection: textDirection,
       child: Scaffold(
         endDrawer: isDesktop ? null : _buildMobileDrawer(context),
-        // appBar: isDesktop
-        //     ? null
-        //     : AppBar(
-        //         actions: [
-        //           const FontFamilyPopup(),
 
-        //           const SizedBox(width: 6),
-
-        //           const FontWeightPopup(),
-        //           FontSizeButton(),
-        //         ],
-        //       ),
         body: SafeArea(
           child: isDesktop
               ? Column(
@@ -47,7 +36,6 @@ class EditorScreen extends StatelessWidget {
                 )
               : _buildMobileLayout(context),
         ),
-        //  bottomNavigationBar: isDesktop ? null : _buildMobileBottomBar(context),
       ),
     );
   }
@@ -102,7 +90,7 @@ class EditorScreen extends StatelessWidget {
                         const SizedBox(width: 6),
 
                         const FontWeightPopup(),
-                        FontSizeButton(),
+                        const FontSizeButton(),
                       ],
                     ),
                   ),
@@ -279,12 +267,6 @@ class EditorScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                 children: [
-                  const FontFamilyPopup(),
-
-                  const SizedBox(width: 6),
-
-                  const FontWeightPopup(),
-                  FontSizeButton(),
                   ListTile(
                     leading: const Icon(
                       Icons.tune_outlined,

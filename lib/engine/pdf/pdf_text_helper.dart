@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 class PdfTextHelper {
@@ -233,7 +232,6 @@ class PdfTextHelper {
   /// تشكيل الحروف وعكس المقاطع العربية في LTR مع الحفاظ على المسافات والأقواس
   static String _reshapeArabicForLtr(String text) {
     if (text.isEmpty) return text;
-
     final leadingMatch = RegExp(r'^\s+').firstMatch(text);
     final trailingMatch = RegExp(r'\s+$').firstMatch(text);
 
@@ -273,7 +271,7 @@ class PdfTextHelper {
       final prevConnects = _canConnectBefore(runes, i);
       final nextConnects = _canConnectAfter(runes, i);
 
-      if (forms.length == 4) {
+      if (forms.length >= 4) {
         if (prevConnects && nextConnects) {
           reshaped.add(forms[3]); // Medial
         } else if (prevConnects) {
@@ -283,12 +281,15 @@ class PdfTextHelper {
         } else {
           reshaped.add(forms[0]); // Isolated
         }
-      } else {
+      } else if (forms.length == 2) {
         if (prevConnects) {
           reshaped.add(forms[1]); // Final
         } else {
           reshaped.add(forms[0]); // Isolated
         }
+      } else if (forms.length == 1) {
+        // حرف له شكل واحد فقط مثل همزة القطع المستقلة "ء"
+        reshaped.add(forms[0]);
       }
     }
 
@@ -340,16 +341,33 @@ class PdfTextHelper {
     return forms != null && forms.length == 4;
   }
 
+  // static bool _canConnectAfter(List<int> runes, int index) {
+  //   int nextIndex = index + 1;
+  //   // تخطي الحركات التشكيلية للوصول إلى الحرف الفعلي التالي
+  //   while (nextIndex < runes.length && _isDiacritic(runes[nextIndex])) {
+  //     nextIndex++;
+  //   }
+  //   if (nextIndex >= runes.length) return false;
+  //   final next = runes[nextIndex];
+  //   if (next == 0x0640) return true;
+  //   return _arabicForms.containsKey(next) && next != 0x0621;
+  // }
   static bool _canConnectAfter(List<int> runes, int index) {
     int nextIndex = index + 1;
-    // تخطي الحركات التشكيلية للوصول إلى الحرف الفعلي التالي
+
     while (nextIndex < runes.length && _isDiacritic(runes[nextIndex])) {
       nextIndex++;
     }
+
     if (nextIndex >= runes.length) return false;
+
     final next = runes[nextIndex];
+
     if (next == 0x0640) return true;
-    return _arabicForms.containsKey(next) && next != 0x0621;
+
+    final forms = _arabicForms[next];
+
+    return forms != null && forms.length == 4;
   }
 
   static int? _getLamAlef(int alefCode, bool prevConnects) {
@@ -406,12 +424,9 @@ class PdfTextHelper {
       0x0649,
       0xFEF0,
     ], // الألف المقصورة المنفصلة = 0x0649 لتفادي نقص المحارف
-    0x064A: [
-      0x064A,
-      0xFEF2,
-      0xFEF3,
-      0xFEF4,
-    ], // الياء المنفصلة = 0x064A لتفادي خطأ U+FEF1 في خط Cairo
+    0x064A: [0x064A, 0xFEF2, 0xFEF3, 0xFEF4],
+
+    //// الياء المنفصلة = 0x064A لتفادي خطأ U+FEF1 في خط Cairo
   };
 }
 

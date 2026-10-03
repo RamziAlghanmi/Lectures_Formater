@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lecture_formater/core/config/app_fonts.dart';
 import 'package:lecture_formater/domain/entities/document_theme_config.dart';
+import 'package:lecture_formater/presentation/screens/editor_screen.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/document_provider.dart';
@@ -24,6 +25,12 @@ class FontFamilyPopup extends StatelessWidget {
         docProvider.updateTheme(
           docProvider.document.theme.copyWith(fontFamily: value),
         );
+        final pdfPreviewState = EditorScreen.PdfPreviewsKey.currentState;
+        if (pdfPreviewState != null) {
+          pdfPreviewState.refreshDoc(
+            ' حفظ تغيرات عاىلة الخط على معاينة Pdf ...',
+          );
+        }
       },
 
       itemBuilder: (context) {
@@ -78,10 +85,8 @@ class FontWeightPopup extends StatelessWidget {
   Widget build(BuildContext context) {
     final docProvider = context.watch<DocumentProvider>();
 
-    // final family = AppFonts.getByName(data.family);
     final family = AppFonts.getByName(docProvider.document.theme.fontFamily);
 
-    // final currentWeight = DocumentFontWeight.fromInt(data.weight);
     final currentWeight = DocumentFontWeight.fromInt(
       docProvider.document.theme.fontWeight,
     );
@@ -93,6 +98,10 @@ class FontWeightPopup extends StatelessWidget {
         docProvider.updateTheme(
           docProvider.document.theme.copyWith(fontWeight: weight),
         );
+        final pdfPreviewState = EditorScreen.PdfPreviewsKey.currentState;
+        if (pdfPreviewState != null) {
+          pdfPreviewState.refreshDoc(' حفظ تغيرات وزن الخط على معاينة Pdf ...');
+        }
       },
 
       itemBuilder: (context) {
