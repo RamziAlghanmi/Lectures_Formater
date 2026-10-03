@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class AppTheme {
   const AppTheme._();
 
-  static ThemeData lightTheme({String fontFamily = 'Cairo'}) {
+  static ThemeData lightTheme({String fontFamily = 'NotoNaskhArabic'}) {
     const primaryColor = Color(0xFF1E3A8A);
     const secondaryColor = Color(0xFF0D9488);
     const surfaceColor = Color(0xFFF8FAFC);

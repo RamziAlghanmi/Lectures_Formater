@@ -165,9 +165,9 @@ class PdfBlockDispatcher {
     final text = (node.fields['text'] as String?)?.trim() ?? '';
     final level = node.fields['level'] as String? ?? 'h1';
     final fontSize = switch (level) {
-      'h1' => theme.baseFontSize * 1.6,
-      'h2' => theme.baseFontSize * 1.35,
-      _ => theme.baseFontSize * 1.15,
+      'h1' => theme.baseFontSize * 1.3,
+      'h2' => theme.baseFontSize * 1.2,
+      _ => theme.baseFontSize * 1.1,
     };
 
     return [
@@ -185,8 +185,7 @@ class PdfBlockDispatcher {
             style: pw.TextStyle(
               font: fonts.bold,
               fontSize: fontSize,
-              //     fontFallback: fonts.fontFallback,
-              color: const PdfColor.fromInt(0xFF0F172A),
+              color: primaryColor,
             ),
             isRtl: isRtl,
           ),

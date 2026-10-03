@@ -13,7 +13,7 @@ class FontFamilyPopup extends StatelessWidget {
   Widget build(BuildContext context) {
     final docProvider = context.watch<DocumentProvider>();
     final selectedFamily = context.select<DocumentProvider, String>(
-      (provider) => provider.document?.theme.fontFamily ?? 'Cairo',
+      (provider) => provider.document?.theme.fontFamily ?? 'NotoNaskhArabic',
     );
 
     final current = AppFonts.getByName(selectedFamily);

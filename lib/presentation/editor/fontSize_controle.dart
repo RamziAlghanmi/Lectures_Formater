@@ -6,24 +6,7 @@ import 'package:provider/provider.dart';
 class FontSizeButton extends StatelessWidget {
   const FontSizeButton({super.key});
 
-  static const List<double> _fontSizes = [
-    8,
-    9,
-    10,
-    11,
-    12,
-    14,
-    16,
-    18,
-    20,
-    22,
-    24,
-    28,
-    32,
-    36,
-    48,
-    72,
-  ];
+  static const List<double> _fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20];
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +51,7 @@ class FontSizeButton extends StatelessWidget {
       },
 
       child: Container(
-        width: 35,
+        width: 40,
         alignment: Alignment.center,
         child: Text(
           fontSize.toStringAsFixed(

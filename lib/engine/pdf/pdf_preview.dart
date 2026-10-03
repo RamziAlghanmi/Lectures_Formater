@@ -76,7 +76,26 @@ class PdfPreviewsState extends State<PdfPreviews> {
                     color: Color(0xFF525659),
                   ),
                 )
-              : Container(),
+              : Center(
+                  child: Container(
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.error,
+                            color: Colors.red.shade600,
+                            size: 48,
+                          ),
+                          SizedBox(height: 20),
+                          Text(
+                            "تعذر إنشاء معاينة PDF",
+                            style: TextStyle(color: Colors.black, fontSize: 16),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
         ),
       ],
     );

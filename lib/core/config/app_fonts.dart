@@ -124,6 +124,9 @@ class AppFonts {
   // ============================================================
 
   static AppFontFamily getByName(String name) {
-    return all.firstWhere((font) => font.name == name, orElse: () => cairo);
+    return all.firstWhere(
+      (font) => font.name == name,
+      orElse: () => notoNaskhArabic,
+    );
   }
 }
