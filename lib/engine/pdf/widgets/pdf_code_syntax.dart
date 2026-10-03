@@ -247,7 +247,7 @@ class PdfSyntaxHighlighter {
     );
     final stringArabicStyle = pw.TextStyle(
       font: arabicFont,
-      fontSize: fontSize * 0.95,
+      fontSize: fontSize * 1.1,
       color: stringColor,
     );
 
