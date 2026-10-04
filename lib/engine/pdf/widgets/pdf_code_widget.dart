@@ -40,11 +40,8 @@ class PdfCodeWidget extends pw.StatelessWidget {
 
     final showLineNumbers = (node.fields['showLineNumbers'] as bool?) ?? true;
 
-<<<<<<< HEAD
     final codeFontSize = 12.0;
-=======
-    final codeFontSize = 13;
->>>>>>> 4ec83594db730f824ad95c5094f2849739add7fc
+
     const darkBackground = PdfColor.fromInt(0xFF1E1E1E);
     const headerBackground = PdfColor.fromInt(0xFF252526);
     final direction = _getDirection(node);
@@ -69,13 +66,9 @@ class PdfCodeWidget extends pw.StatelessWidget {
               padding: pw.EdgeInsets.only(
                 top: node.layoutRules.spaceBefore,
                 bottom: 4.0,
-<<<<<<< HEAD
+
                 left: 2.0,
                 right: 2.0,
-=======
-                left: 1.0,
-                right: 1.0,
->>>>>>> 4ec83594db730f824ad95c5094f2849739add7fc
               ),
               child: PdfTextHelper.buildText(
                 fallbackFont: codeFontBundle.regular,
@@ -221,11 +214,8 @@ class PdfCodeWidget extends pw.StatelessWidget {
                   language,
                   codeFont: codeFontBundle.regular,
                   arabicFont: fontBundle.regular,
-<<<<<<< HEAD
+
                   fontSize: codeFontSize * 1.1,
-=======
-                  fontSize: codeFontSize,
->>>>>>> 4ec83594db730f824ad95c5094f2849739add7fc
                 ),
               ),
             ),

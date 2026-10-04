@@ -113,8 +113,8 @@ class AppFonts {
   // ============================================================
 
   static const List<AppFontFamily> all = [
-    cairo,
     notoNaskhArabic,
+    cairo,
     amiri,
     tajawal,
   ];
