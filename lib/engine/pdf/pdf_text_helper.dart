@@ -25,12 +25,13 @@ class PdfTextHelper {
   }) {
     if (text.isEmpty) return pw.SizedBox();
 
-    // تطبيع الياء الفارسية (إن كُتبت بالخطأ) إلى ياء عربية قياسية
-    final normalized = text.replaceAll('\u06CC', '\u064A');
+    // تطبيع الياء الفارسية والكاف إن وجدتا إلى الأصول العربية القياسية
+    final normalized = text
+        .replaceAll('\u06CC', '\u064A')
+        .replaceAll('\u06A9', '\u0643');
 
-    // إذا كان النص لا يحتوي على أي حرف عربي (مثل خلايا الجداول البرمجية)
+    // إذا كان النص لا يحتوي على أي حرف عربي (مثل خلايا الكود أو الجداول اللاتينية)
     // يُرسم باتجاه LTR حصراً لحماية الأقواس من الانعكاس
-
     final textHasArabic = hasArabic(normalized);
     final effectiveDirection = textHasArabic
         ? (isRtl ? pw.TextDirection.rtl : pw.TextDirection.ltr)
@@ -83,13 +84,13 @@ class PdfTextHelper {
 
   /// تقسيم النص وتوزيع الرموز والمسافات بدقة BiDi هندسية
   static List<_TextChunk> _segmentText(String text, bool isRtl) {
-    // نصوص إنجليزية أو برمجية خالصة: كتلة واحدة لا تُجزأ
     if (!hasArabic(text)) {
       return [_TextChunk(text: text, isArabic: false)];
     }
 
+    // عزل الأقواس كرموز مستقلة لمنع دمجها مع علامات الترقيم المجاورة
     final tokenRegex = RegExp(
-      r'([a-zA-Z0-9_]+|[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+|[^\s\w]+|\s+)',
+      r'([a-zA-Z0-9_]+|[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+|[()[\]{}«»<>]|[^\s\w()[\]{}«»<>]+|\s+)',
       unicode: true,
     );
     final tokens = tokenRegex.allMatches(text).map((m) => m.group(0)!).toList();
@@ -105,36 +106,27 @@ class PdfTextHelper {
         classified.add(_IntermediateToken(t, _TokenType.arabic));
       } else if (_latinLettersRegex.hasMatch(t)) {
         classified.add(_IntermediateToken(t, _TokenType.latin));
+      } else if (_isBracket(t)) {
+        classified.add(_IntermediateToken(t, _TokenType.bracket));
       } else {
         classified.add(_IntermediateToken(t, _TokenType.neutral));
       }
     }
 
-    // 1. حسم الرموز وعلامات الترقيم المحايدة مع حماية أقواس الإنجليزية
+    // 1. حسم اتجاه الأقواس كأزواج متطابقة بالاعتماد على محتواها الداخلي
+    _resolveBrackets(classified, isRtl);
+
+    // 2. حسم بقية الرموز وعلامات الترقيم المحايدة (: ، . - إلخ)
     for (int i = 0; i < classified.length; i++) {
       if (classified[i].type == _TokenType.neutral) {
-        final tokenText = classified[i].text.trim();
         final prevLatin = _findPrevNonSpaceIsLatin(classified, i);
         final nextLatin = _findNextNonSpaceIsLatin(classified, i);
 
-        final isClosingBracket =
-            tokenText == ')' || tokenText == ']' || tokenText == '}';
-        final isOpeningBracket =
-            tokenText == '(' || tokenText == '[' || tokenText == '{';
-
-        // إذا كان الرمز محاطاً بكلمتين إنجليزيتين من الطرفين (مثل user.name أو 10.5)
+        // رموز محاطة بكلمات لاتينية حصراً من الطرفين (مثل user.name أو 10.5)
         if (prevLatin && nextLatin) {
           classified[i].type = _TokenType.latin;
         }
-        // قوس إغلاق لتعبير إنجليزي مثل UPPER(s) أو (SQL)
-        else if (isClosingBracket && prevLatin) {
-          classified[i].type = _TokenType.latin;
-        }
-        // قوس فتح لتعبير إنجليزي مثل (SQL) أو (POSITION)
-        else if (isOpeningBracket && nextLatin) {
-          classified[i].type = _TokenType.latin;
-        }
-        // بقية علامات الترقيم (: ، . -) تتبع السياق العربي لمنع انعكاسها
+        // بقية علامات الترقيم (: ، . -) تتبع السياق العربي دائماً
         else if (isRtl) {
           classified[i].type = _TokenType.arabic;
         } else {
@@ -147,7 +139,7 @@ class PdfTextHelper {
       }
     }
 
-    // 2. توزيع المسافات البينية لمنع ابتلاع المسافة بين اللغات
+    // 3. توزيع المسافات البينية لمنع ابتلاع المسافة بين اللغات
     for (int i = 0; i < classified.length; i++) {
       if (classified[i].type == _TokenType.space) {
         final prevType = i > 0 ? classified[i - 1].type : null;
@@ -171,7 +163,7 @@ class PdfTextHelper {
       }
     }
 
-    // 3. دمج المقاطع المتتالية المتجانسة
+    // 4. دمج المقاطع المتتالية المتجانسة
     final List<_TextChunk> chunks = [];
     for (final item in classified) {
       final isAr = item.type == _TokenType.arabic;
@@ -183,6 +175,93 @@ class PdfTextHelper {
     }
 
     return chunks;
+  }
+
+  static bool _isBracket(String t) {
+    if (t.length != 1) return false;
+    final c = t[0];
+    return c == '(' ||
+        c == ')' ||
+        c == '[' ||
+        c == ']' ||
+        c == '{' ||
+        c == '}' ||
+        c == '<' ||
+        c == '>' ||
+        c == '«' ||
+        c == '»';
+  }
+
+  static bool _isOpenBracket(String t) =>
+      t == '(' || t == '[' || t == '{' || t == '<' || t == '«';
+
+  static bool _isCloseBracket(String t) =>
+      t == ')' || t == ']' || t == '}' || t == '>' || t == '»';
+
+  /// مطابقة كل قوس بقوسه المقابل وتحديد اتجاههما بناءً على المحتوى الداخلي
+  static void _resolveBrackets(
+    List<_IntermediateToken> classified,
+    bool isRtl,
+  ) {
+    final List<int> stack = [];
+
+    for (int i = 0; i < classified.length; i++) {
+      if (classified[i].type == _TokenType.bracket) {
+        final text = classified[i].text;
+        if (_isOpenBracket(text)) {
+          stack.add(i);
+        } else if (_isCloseBracket(text)) {
+          if (stack.isNotEmpty) {
+            final openIdx = stack.removeLast();
+            bool hasArabic = false;
+            bool hasLatin = false;
+
+            for (int j = openIdx + 1; j < i; j++) {
+              if (classified[j].type == _TokenType.arabic) {
+                hasArabic = true;
+              } else if (classified[j].type == _TokenType.latin) {
+                hasLatin = true;
+              }
+            }
+
+            final _TokenType resolvedType;
+            if (hasArabic) {
+              // إذا كان ما بداخل القوسين يحتوي على عربي (مثل: الحل (بعد تطبيق LSP)) فالقوسان عربيان
+              resolvedType = _TokenType.arabic;
+            } else if (hasLatin) {
+              // إذا كان ما بداخل القوسين لاتينياً بحتاً (مثل: (Abstraction) أو (LSP)) فالقوسان لاتينيان
+              resolvedType = _TokenType.latin;
+            } else {
+              // أقواس فارغة تابعة لدوال برمجية مثل ()UnimplementedError
+              final prevLatin = _findPrevNonSpaceIsLatin(classified, openIdx);
+              resolvedType = prevLatin
+                  ? _TokenType.latin
+                  : (isRtl ? _TokenType.arabic : _TokenType.latin);
+            }
+
+            classified[openIdx].type = resolvedType;
+            classified[i].type = resolvedType;
+          } else {
+            // قوس إغلاق بدون قوس فتح سابق
+            final prevLatin = _findPrevNonSpaceIsLatin(classified, i);
+            final nextLatin = _findNextNonSpaceIsLatin(classified, i);
+            classified[i].type = (prevLatin && nextLatin)
+                ? _TokenType.latin
+                : (isRtl ? _TokenType.arabic : _TokenType.latin);
+          }
+        }
+      }
+    }
+
+    // أقواس الفتح غير المغلقة
+    while (stack.isNotEmpty) {
+      final openIdx = stack.removeLast();
+      final prevLatin = _findPrevNonSpaceIsLatin(classified, openIdx);
+      final nextLatin = _findNextNonSpaceIsLatin(classified, openIdx);
+      classified[openIdx].type = (prevLatin && nextLatin)
+          ? _TokenType.latin
+          : (isRtl ? _TokenType.arabic : _TokenType.latin);
+    }
   }
 
   static bool _findPrevNonSpaceIsLatin(
@@ -251,14 +330,21 @@ class PdfTextHelper {
     for (int i = 0; i < runes.length; i++) {
       final cur = runes[i];
 
-      // معالجة اللام ألف
+      // معالجة اللام ألف المركبة مع تخطي أي حركات تشكيل بينهما
       if (cur == 0x0644 && i + 1 < runes.length) {
-        final next = runes[i + 1];
-        final lamAlef = _getLamAlef(next, _canConnectBefore(runes, i));
-        if (lamAlef != null) {
-          reshaped.add(lamAlef);
-          i++;
-          continue;
+        int nextAlefIndex = i + 1;
+        while (nextAlefIndex < runes.length &&
+            _isDiacritic(runes[nextAlefIndex])) {
+          nextAlefIndex++;
+        }
+        if (nextAlefIndex < runes.length) {
+          final next = runes[nextAlefIndex];
+          final lamAlef = _getLamAlef(next, _canConnectBefore(runes, i));
+          if (lamAlef != null) {
+            reshaped.add(lamAlef);
+            i = nextAlefIndex;
+            continue;
+          }
         }
       }
 
@@ -273,23 +359,23 @@ class PdfTextHelper {
 
       if (forms.length >= 4) {
         if (prevConnects && nextConnects) {
-          reshaped.add(forms[3]); // Medial
+          reshaped.add(forms[3]); // Medial (وسطي)
         } else if (prevConnects) {
-          reshaped.add(forms[1]); // Final
+          reshaped.add(forms[1]); // Final (نهائي متصل)
         } else if (nextConnects) {
-          reshaped.add(forms[2]); // Initial
+          reshaped.add(forms[2]); // Initial (بدائي)
         } else {
-          reshaped.add(forms[0]); // Isolated
+          reshaped.add(forms[0]); // Isolated (منفصل)
         }
       } else if (forms.length == 2) {
+        // حروف الانفصال (ا، د، ذ، ر، ز، و، ؤ، ة، ى)
         if (prevConnects) {
           reshaped.add(forms[1]); // Final
         } else {
           reshaped.add(forms[0]); // Isolated
         }
       } else if (forms.length == 1) {
-        // حرف له شكل واحد فقط مثل همزة القطع المستقلة "ء"
-        reshaped.add(forms[0]);
+        reshaped.add(forms[0]); // همزة السطر (ء)
       }
     }
 
@@ -328,9 +414,9 @@ class PdfTextHelper {
   static bool _isDiacritic(int rune) =>
       (rune >= 0x064B && rune <= 0x065F) || rune == 0x0670;
 
+  /// الحرف السابق يتصل بما بعده فقط إذا كان رباعي الأشكال (طوله 4) أو كشيدة
   static bool _canConnectBefore(List<int> runes, int index) {
     int prevIndex = index - 1;
-    // تخطي الحركات التشكيلية للوصول إلى الحرف الفعلي السابق
     while (prevIndex >= 0 && _isDiacritic(runes[prevIndex])) {
       prevIndex--;
     }
@@ -341,33 +427,16 @@ class PdfTextHelper {
     return forms != null && forms.length == 4;
   }
 
-  // static bool _canConnectAfter(List<int> runes, int index) {
-  //   int nextIndex = index + 1;
-  //   // تخطي الحركات التشكيلية للوصول إلى الحرف الفعلي التالي
-  //   while (nextIndex < runes.length && _isDiacritic(runes[nextIndex])) {
-  //     nextIndex++;
-  //   }
-  //   if (nextIndex >= runes.length) return false;
-  //   final next = runes[nextIndex];
-  //   if (next == 0x0640) return true;
-  //   return _arabicForms.containsKey(next) && next != 0x0621;
-  // }
+  /// الحرف التالي يقبل الاتصال بما قبله إذا كان أي حرف عربي غير همزة السطر
   static bool _canConnectAfter(List<int> runes, int index) {
     int nextIndex = index + 1;
-
     while (nextIndex < runes.length && _isDiacritic(runes[nextIndex])) {
       nextIndex++;
     }
-
     if (nextIndex >= runes.length) return false;
-
     final next = runes[nextIndex];
-
-    if (next == 0x0640) return true;
-
-    final forms = _arabicForms[next];
-
-    return forms != null && forms.length == 4;
+    if (next == 0x0640) return true; // كشيدة
+    return _arabicForms.containsKey(next) && next != 0x0621;
   }
 
   static int? _getLamAlef(int alefCode, bool prevConnects) {
@@ -386,51 +455,51 @@ class PdfTextHelper {
   }
 
   static const Map<int, List<int>> _arabicForms = {
-    0x0621: [0xFE80],
-    0x0622: [0xFE81, 0xFE82],
-    0x0623: [0xFE83, 0xFE84],
-    0x0624: [0xFE85, 0xFE86],
-    0x0625: [0xFE87, 0xFE88],
-    0x0626: [0xFE89, 0xFE8A, 0xFE8B, 0xFE8C],
-    0x0627: [0xFE8D, 0xFE8E],
-    0x0628: [0xFE8F, 0xFE90, 0xFE91, 0xFE92],
-    0x0629: [0xFE93, 0xFE94],
-    0x062A: [0xFE95, 0xFE96, 0xFE97, 0xFE98],
-    0x062B: [0xFE99, 0xFE9A, 0xFE9B, 0xFE9C],
-    0x062C: [0xFE9D, 0xFE9E, 0xFE9F, 0xFEA0],
-    0x062D: [0xFEA1, 0xFEA2, 0xFEA3, 0xFEA4],
-    0x062E: [0xFEA5, 0xFEA6, 0xFEA7, 0xFEA8],
-    0x062F: [0xFEA9, 0xFEAA],
-    0x0630: [0xFEAB, 0xFEAC],
-    0x0631: [0xFEAD, 0xFEAE],
-    0x0632: [0xFEAF, 0xFEB0],
-    0x0633: [0xFEB1, 0xFEB2, 0xFEB3, 0xFEB4],
-    0x0634: [0xFEB5, 0xFEB6, 0xFEB7, 0xFEB8],
-    0x0635: [0xFEB9, 0xFEBA, 0xFEBB, 0xFEBC],
-    0x0636: [0xFEBD, 0xFEBE, 0xFEBF, 0xFEC0],
-    0x0637: [0xFEC1, 0xFEC2, 0xFEC3, 0xFEC4],
-    0x0638: [0xFEC5, 0xFEC6, 0xFEC7, 0xFEC8],
-    0x0639: [0xFEC9, 0xFECA, 0xFECB, 0xFECC],
-    0x063A: [0xFECD, 0xFECE, 0xFECF, 0xFED0],
-    0x0641: [0xFED1, 0xFED2, 0xFED3, 0xFED4],
-    0x0642: [0xFED5, 0xFED6, 0xFED7, 0xFED8],
-    0x0643: [0xFED9, 0xFEDA, 0xFEDB, 0xFEDC],
-    0x0644: [0xFEDD, 0xFEDE, 0xFEDF, 0xFEE0],
-    0x0645: [0xFEE1, 0xFEE2, 0xFEE3, 0xFEE4],
-    0x0646: [0xFEE5, 0xFEE6, 0xFEE7, 0xFEE8],
-    0x0647: [0xFEE9, 0xFEEA, 0xFEEB, 0xFEEC],
-    0x0648: [0xFEED, 0xFEEE],
-    0x0649: [
-      0x0649,
-      0xFEF0,
-    ], // الألف المقصورة المنفصلة = 0x0649 لتفادي نقص المحارف
-    0x064A: [0x064A, 0xFEF2, 0xFEF3, 0xFEF4],
-
-    //// الياء المنفصلة = 0x064A لتفادي خطأ U+FEF1 في خط Cairo
+    0x0621: [0xFE80], // ء
+    0x0622: [0xFE81, 0xFE82], // آ
+    0x0623: [0xFE83, 0xFE84], // أ
+    0x0624: [0xFE85, 0xFE86], // ؤ
+    0x0625: [0xFE87, 0xFE88], // إ
+    0x0626: [0xFE89, 0xFE8A, 0xFE8B, 0xFE8C], // ئ
+    0x0627: [0xFE8D, 0xFE8E], // ا
+    0x0628: [0xFE8F, 0xFE90, 0xFE91, 0xFE92], // ب
+    0x0629: [0xFE93, 0xFE94], // ة
+    0x062A: [0xFE95, 0xFE96, 0xFE97, 0xFE98], // ت
+    0x062B: [0xFE99, 0xFE9A, 0xFE9B, 0xFE9C], // ث
+    0x062C: [0xFE9D, 0xFE9E, 0xFE9F, 0xFEA0], // ج
+    0x062D: [0xFEA1, 0xFEA2, 0xFEA3, 0xFEA4], // ح
+    0x062E: [0xFEA5, 0xFEA6, 0xFEA7, 0xFEA8], // خ
+    0x062F: [0xFEA9, 0xFEAA], // د
+    0x0630: [0xFEAB, 0xFEAC], // ذ
+    0x0631: [0xFEAD, 0xFEAE], // ر
+    0x0632: [0xFEAF, 0xFEB0], // ز
+    0x0633: [0xFEB1, 0xFEB2, 0xFEB3, 0xFEB4], // س
+    0x0634: [0xFEB5, 0xFEB6, 0xFEB7, 0xFEB8], // ش
+    0x0635: [0xFEB9, 0xFEBA, 0xFEBB, 0xFEBC], // ص
+    0x0636: [0xFEBD, 0xFEBE, 0xFEBF, 0xFEC0], // ض
+    0x0637: [0xFEC1, 0xFEC2, 0xFEC3, 0xFEC4], // ط
+    0x0638: [0xFEC5, 0xFEC6, 0xFEC7, 0xFEC8], // ظ
+    0x0639: [0xFEC9, 0xFECA, 0xFECB, 0xFECC], // ع
+    0x063A: [0xFECD, 0xFECE, 0xFECF, 0xFED0], // غ
+    0x0641: [0xFED1, 0xFED2, 0xFED3, 0xFED4], // ف
+    0x0642: [0xFED5, 0xFED6, 0xFED7, 0xFED8], // ق
+    0x0643: [0xFED9, 0xFEDA, 0xFEDB, 0xFEDC], // ك
+    0x0644: [0xFEDD, 0xFEDE, 0xFEDF, 0xFEE0], // ل
+    0x0645: [0xFEE1, 0xFEE2, 0xFEE3, 0xFEE4], // م
+    0x0646: [0xFEE5, 0xFEE6, 0xFEE7, 0xFEE8], // ن
+    0x0647: [0xFEE9, 0xFEEA, 0xFEEB, 0xFEEC], // ه
+    0x0648: [0xFEED, 0xFEEE], // و
+    0x0649: [0x0649, 0xFEF0], // ى (Isolated=0x0649 لتفادي نقص المحارف)
+    0x064A: [
+      0x064A,
+      0xFEF2,
+      0xFEF3,
+      0xFEF4,
+    ], // ي (Isolated=0x064A لتفادي خطأ U+FEF1 في خط Cairo)
   };
 }
 
-enum _TokenType { arabic, latin, neutral, space }
+enum _TokenType { arabic, latin, neutral, bracket, space }
 
 class _IntermediateToken {
   String text;

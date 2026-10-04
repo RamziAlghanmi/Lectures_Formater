@@ -82,7 +82,6 @@ class PdfBlockDispatcher {
           PdfCodeWidget(
             node: node,
             fontBundle: fontBundle,
-            baseFontSize: themeConfig.baseFontSize,
             codeFontBundle: codeFontBundle,
           ),
         ];

@@ -205,18 +205,12 @@ class PdfSyntaxHighlighter {
     required pw.Font arabicFont,
     required double fontSize,
   }) {
-    // 1. تحويل الـ Tabs إلى 4 مسافات أفقية
     final expandedLine = line.replaceAll('\t', '    ').replaceAll('\r', '');
     final charWidth = fontSize * 0.60;
 
     if (expandedLine.isEmpty) {
       return pw.SizedBox(height: fontSize * 1.35);
     }
-
-    final lang = language.toLowerCase();
-    final keywordList = _keywords[lang] ?? _keywords['dart']!;
-    final tokens = _tokenize(expandedLine);
-    final widgets = <pw.Widget>[];
 
     final defaultCodeStyle = pw.TextStyle(
       font: codeFont,
@@ -247,9 +241,14 @@ class PdfSyntaxHighlighter {
     );
     final stringArabicStyle = pw.TextStyle(
       font: arabicFont,
-      fontSize: fontSize * 0.95,
+      fontSize: fontSize * 1.1,
       color: stringColor,
     );
+    // final describeArabicStyle = pw.TextStyle(
+    //   font: arabicFont,
+    //   fontSize: fontSize * 1.3,
+    //   color: const PdfColor.fromInt(0xFFD4D4D4),
+    // );
 
     final keywordStyle = pw.TextStyle(
       font: codeFont,
@@ -267,16 +266,54 @@ class PdfSyntaxHighlighter {
       color: numberColor,
     );
 
+    final trimmedLine = expandedLine.trim();
+
+    // 1. معالجة السطور التي تمثل شرحاً أو نصاً عربياً كاملاً كوحدة واحدة
+    // هذا يمنع تفكيك السطر إلى كلمات وعكسها بواسطة الـ Row
+    if (PdfTextHelper.hasArabic(trimmedLine) &&
+        !PdfTextHelper.hasLatin(trimmedLine)) {
+      final leadingSpacesCount = expandedLine.indexOf(trimmedLine);
+      final isComment =
+          trimmedLine.startsWith('//') ||
+          trimmedLine.startsWith('#') ||
+          trimmedLine.startsWith('/*') ||
+          trimmedLine.startsWith('--');
+
+      final selectedStyle = isComment ? commentArabicStyle : defaultArabicStyle;
+
+      return pw.Row(
+        mainAxisSize: pw.MainAxisSize.min,
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          if (leadingSpacesCount > 0)
+            pw.SizedBox(width: leadingSpacesCount * charWidth),
+          PdfTextHelper.buildText(
+            fallbackFont: codeFont,
+            trimmedLine,
+            style: selectedStyle,
+            latinStyle: defaultCodeStyle,
+            isRtl: true,
+          ),
+        ],
+      );
+    }
+
+    // 2. تحليل الأسطر البرمجية المشتركة
+    final lang = language.toLowerCase();
+    final keywordList = _keywords[lang] ?? _keywords['dart']!;
+    final tokens = _tokenize(expandedLine);
+    final widgets = <pw.Widget>[];
+
     for (final token in tokens) {
       if (token.isEmpty) continue;
 
-      // 1. معالجة الإزاحات والمسافات البادئة
+      // الإزاحات والمسافات
       if (token.trim().isEmpty) {
         widgets.add(pw.SizedBox(width: token.length * charWidth));
         continue;
       }
 
-      // 2. التعليقات البرمجية (تدعم العربية والنصوص المختلطة)
+      // التعليقات البرمجية
       if (token.startsWith('//') ||
           token.startsWith('#') ||
           token.startsWith('/*') ||
@@ -288,14 +325,14 @@ class PdfSyntaxHighlighter {
               token,
               style: commentArabicStyle,
               latinStyle: commentCodeStyle,
-              isRtl: false,
+              isRtl: true,
             ),
           );
         } else {
           widgets.add(pw.Text(token, style: commentCodeStyle));
         }
       }
-      // 3. النصوص (Strings)
+      // النصوص الصريحة (Strings)
       else if (token.startsWith('"') ||
           token.startsWith("'") ||
           token.startsWith('`')) {
@@ -306,26 +343,26 @@ class PdfSyntaxHighlighter {
               token,
               style: stringArabicStyle,
               latinStyle: stringCodeStyle,
-              isRtl: false,
+              isRtl: true,
             ),
           );
         } else {
           widgets.add(pw.Text(token, style: stringCodeStyle));
         }
       }
-      // 4. الأرقام
+      // الأرقام
       else if (_isNumber(token)) {
         widgets.add(pw.Text(token, style: numberStyle));
       }
-      // 5. الكلمات المفتاحية
+      // الكلمات المفتاحية
       else if (keywordList.contains(token)) {
         widgets.add(pw.Text(token, style: keywordStyle));
       }
-      // 6. أسماء الدوال والكلاسات (Capitalized)
+      // أسماء الدوال والكلاسات
       else if (_isCapitalized(token)) {
         widgets.add(pw.Text(token, style: functionStyle));
       }
-      // 7. المتغيرات والكلمات التي تحتوي على حروف عربية
+      // المتغيرات والنصوص العربية
       else if (PdfTextHelper.hasArabic(token)) {
         widgets.add(
           PdfTextHelper.buildText(
@@ -333,11 +370,11 @@ class PdfSyntaxHighlighter {
             token,
             style: defaultArabicStyle,
             latinStyle: defaultCodeStyle,
-            isRtl: false,
+            isRtl: true,
           ),
         );
       }
-      // 8. الرموز والعمليات الرياضية
+      // الرموز والعمليات البرمجية
       else {
         widgets.add(pw.Text(token, style: defaultCodeStyle));
       }
@@ -382,6 +419,7 @@ class PdfSyntaxHighlighter {
       // تعليقات السطر الواحد
       else if (!inString &&
           ((i + 1 < line.length && char == '/' && line[i + 1] == '/') ||
+              (i + 1 < line.length && char == '/' && line[i + 1] == '*') ||
               (i + 1 < line.length && char == '-' && line[i + 1] == '-') ||
               char == '#')) {
         if (buffer.isNotEmpty) {
@@ -391,8 +429,23 @@ class PdfSyntaxHighlighter {
         tokens.add(line.substring(i));
         break;
       }
-      // عزل المسافات المتتالية
+      // المسافات: الحفاظ على العبارات والجمل العربية كوحدة واحدة وعدم تفتيتها
       else if (!inString && char == ' ') {
+        if (buffer.isNotEmpty && PdfTextHelper.hasArabic(buffer.toString())) {
+          int j = i;
+          while (j < line.length && line[j] == ' ') {
+            j++;
+          }
+          // إذا كانت الكلمة التالية أيضاً عربية، يتم دمج المسافة والكلمة في نفس الـ Token
+          if (j < line.length &&
+              (PdfTextHelper.hasArabic(line[j]) ||
+                  _isArabicFollower(line, j))) {
+            buffer.write(line.substring(i, j));
+            i = j - 1;
+            continue;
+          }
+        }
+
         if (buffer.isNotEmpty) {
           tokens.add(buffer.toString());
           buffer.clear();
@@ -412,7 +465,7 @@ class PdfSyntaxHighlighter {
         }
         tokens.add(char);
       }
-      // الحروف (سواء كانت عربية أو إنجليزية) والأرقام
+      // الحروف والأرقام
       else {
         buffer.write(char);
       }
@@ -423,6 +476,15 @@ class PdfSyntaxHighlighter {
     }
 
     return tokens;
+  }
+
+  static bool _isArabicFollower(String line, int startIndex) {
+    for (int k = startIndex; k < line.length; k++) {
+      if (line[k] == ' ') continue;
+      if (PdfTextHelper.hasArabic(line[k])) return true;
+      if (RegExp(r'[a-zA-Z]').hasMatch(line[k])) return false;
+    }
+    return false;
   }
 
   static bool _isNumber(String text) {
