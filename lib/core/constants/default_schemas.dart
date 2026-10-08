@@ -610,6 +610,13 @@ class DefaultSchemas {
       ),
       fields: [
         FieldDefinition(
+          key: 'fileName',
+          label: 'اسم الملف / الترويسة',
+          type: FieldType.text,
+          defaultValue: '',
+          placeholder: 'مثال: user_repository.dart',
+        ),
+        FieldDefinition(
           key: 'code',
           label: 'نص الشفرة البرمجية',
           type: FieldType.code,
@@ -634,12 +641,14 @@ class DefaultSchemas {
             FieldOption(label: 'Plain Text', value: 'plaintext'),
           ],
         ),
+
         FieldDefinition(
-          key: 'fileName',
-          label: 'اسم الملف / الترويسة',
-          type: FieldType.text,
+          key: 'caption',
+          label: ' شرح الكود أو التعليقات التوضيحية',
+          type: FieldType.multiline,
           defaultValue: '',
-          placeholder: 'مثال: user_repository.dart',
+          placeholder: 'اكتب محتوى الشرح والتفاصيل...',
+          validation: FieldValidationRules(isRequired: true),
         ),
         FieldDefinition(
           key: 'showLineNumbers',

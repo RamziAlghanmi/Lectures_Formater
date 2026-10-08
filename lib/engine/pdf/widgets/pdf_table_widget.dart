@@ -26,30 +26,23 @@ class PdfTableWidget extends pw.StatelessWidget {
   });
 
   @override
+  bool get canSpan => true;
+
+  @override
   pw.Widget build(pw.Context context) {
     final isRtl = (node.layoutRules.textDirection ?? 'rtl') != 'ltr';
-
-    final textDirection = isRtl ? pw.TextDirection.rtl : pw.TextDirection.ltr;
-
     final alignment = isRtl
         ? pw.Alignment.centerRight
         : pw.Alignment.centerLeft;
 
     final headers = _parseHeaders(node.fields['headers']);
     final rowsData = _parseRows(node.fields['rows']);
-    final caption = (node.fields['caption'] as String?)?.trim() ?? '';
-
     final tableFontSize = baseFontSize * 0.88;
-
     const borderColor = PdfColor.fromInt(0xFFCBD5E1);
-
     const alternateRowColor = PdfColor.fromInt(0xFFF8FAFC);
-
     const headerTextColor = PdfColors.white;
-
-    // حساب عدد الأعمدة
+    // حساب عدد الأعمدة الكلي
     int columnCount = headers.length;
-
     for (final row in rowsData) {
       if (row.length > columnCount) {
         columnCount = row.length;
@@ -60,35 +53,14 @@ class PdfTableWidget extends pw.StatelessWidget {
       return pw.SizedBox();
     }
 
-    /*
-     * العمود الأول المنطقي:
-     *
-     * في RTL نقوم بعكس children،
-     * لذلك العمود الأول يظهر في آخر index داخل Table.
-     *
-     * مثال:
-     *
-     * البيانات:
-     * [Architecture, Design, Implementation]
-     *
-     * RTL تصبح:
-     * [Implementation, Design, Architecture]
-     *
-     * وبالتالي Architecture أصبح index = columnCount - 1
-     */
-    final firstColumnIndex = isRtl ? columnCount - 1 : 0;
-
     final tableRows = <pw.TableRow>[];
 
     // ============================================================
-    // 1. ترويسة الجدول
+    // 1. ترويسة الجدول (مع تكرارها تلقائياً عند الانتقال لصفحة جديدة)
     // ============================================================
-
     if (headers.isNotEmpty) {
       final headerCells = List.generate(columnCount, (colIdx) {
         final text = colIdx < headers.length ? headers[colIdx] : '';
-
-        final isFirstColumn = colIdx == firstColumnIndex;
 
         return pw.Container(
           padding: const pw.EdgeInsets.symmetric(
@@ -96,53 +68,37 @@ class PdfTableWidget extends pw.StatelessWidget {
             vertical: 6.0,
           ),
           alignment: alignment,
-          child: isFirstColumn
-              ? pw.Text(
-                  text,
-                  // softWrap: false,
-                  textAlign: isRtl ? pw.TextAlign.right : pw.TextAlign.left,
-                  style: pw.TextStyle(
-                    font: fontBundle.semiBold,
-                    fontSize: tableFontSize,
-                    color: headerTextColor,
-                  ),
-                )
-              : PdfTextHelper.buildText(
-                  fallbackFont: codeFontBundle.bold,
-                  text,
-                  style: pw.TextStyle(
-                    font: fontBundle.semiBold,
-                    fontSize: tableFontSize,
-                    color: headerTextColor,
-                  ),
-                  isRtl: isRtl,
-                ),
+          child: PdfTextHelper.buildText(
+            fallbackFont: codeFontBundle.bold,
+            text,
+            style: pw.TextStyle(
+              font: fontBundle.semiBold,
+              fontSize: tableFontSize,
+              color: headerTextColor,
+            ),
+            isRtl: isRtl,
+          ),
         );
       });
 
       tableRows.add(
         pw.TableRow(
           decoration: pw.BoxDecoration(color: primaryColor),
-          repeat: true,
-
+          repeat: true, // يكرر الترويسة في رأس كل صفحة جديدة ينتقل إليها الجدول
           children: isRtl ? headerCells.reversed.toList() : headerCells,
         ),
       );
     }
 
     // ============================================================
-    // 2. صفوف البيانات
+    // 2. صفوف البيانات (تتدفق صفاً تلو الآخر عبر الصفحات دون انهيار)
     // ============================================================
-
     for (int i = 0; i < rowsData.length; i++) {
       final row = rowsData[i];
-
       final isEven = i % 2 == 0;
 
       final rowCells = List.generate(columnCount, (colIdx) {
         final cellText = colIdx < row.length ? row[colIdx] : '';
-
-        final isFirstColumn = colIdx == firstColumnIndex;
 
         return pw.Container(
           padding: const pw.EdgeInsets.symmetric(
@@ -150,30 +106,17 @@ class PdfTableWidget extends pw.StatelessWidget {
             vertical: 5.5,
           ),
           alignment: alignment,
-
-          child: isFirstColumn
-              ? pw.Text(
-                  cellText,
-                  // softWrap: false,
-                  textAlign: isRtl ? pw.TextAlign.right : pw.TextAlign.left,
-                  style: pw.TextStyle(
-                    font: fontBundle.fontForWeight(theme.fontWeight),
-                    fontSize: tableFontSize * 0.8,
-                    color: const PdfColor.fromInt(0xFF1E293B),
-                    lineSpacing: 1.3,
-                  ),
-                )
-              : PdfTextHelper.buildText(
-                  fallbackFont: codeFontBundle.regular,
-                  cellText,
-                  style: pw.TextStyle(
-                    font: fontBundle.fontForWeight(theme.fontWeight),
-                    fontSize: tableFontSize * 0.8,
-                    color: const PdfColor.fromInt(0xFF1E293B),
-                    lineSpacing: 1.3,
-                  ),
-                  isRtl: isRtl,
-                ),
+          child: PdfTextHelper.buildText(
+            fallbackFont: codeFontBundle.regular,
+            cellText,
+            style: pw.TextStyle(
+              font: fontBundle.fontForWeight(theme.fontWeight),
+              fontSize: tableFontSize * 0.85,
+              color: const PdfColor.fromInt(0xFF1E293B),
+              lineSpacing: 1.3,
+            ),
+            isRtl: isRtl,
+          ),
         );
       });
 
@@ -182,91 +125,33 @@ class PdfTableWidget extends pw.StatelessWidget {
           decoration: pw.BoxDecoration(
             color: isEven ? PdfColors.white : alternateRowColor,
           ),
-
           children: isRtl ? rowCells.reversed.toList() : rowCells,
         ),
       );
     }
 
     // ============================================================
-    // 3. تحديد عرض الأعمدة
+    // 4. توزيع مساحات الأعمدة بنسب مرنة تضمن التفاف النصوص بدقة
     // ============================================================
-
-    final Map<int, pw.TableColumnWidth> columnWidths = {
-      firstColumnIndex: const pw.IntrinsicColumnWidth(),
-    };
-
-    // باقي الأعمدة تأخذ المساحة المتبقية
+    final Map<int, pw.TableColumnWidth> columnWidths = {};
     for (int i = 0; i < columnCount; i++) {
-      if (i == firstColumnIndex) continue;
-
-      columnWidths[i] = pw.IntrinsicColumnWidth();
+      columnWidths[i] = const pw.IntrinsicColumnWidth();
     }
 
     // ============================================================
-    // 4. الجدول
+    // 5. إرجاع الجدول كعنصر مباشر لتمكين الـ MultiPage من شطره
     // ============================================================
-
-    return pw.Directionality(
-      textDirection: textDirection,
-
-      child: pw.Container(
-        margin: pw.EdgeInsets.only(
-          top: node.layoutRules.spaceBefore,
-          bottom: node.layoutRules.spaceAfter,
-          left: 8.0,
-          right: 8.0,
-        ),
-
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-
-          children: [
-            pw.Table(
-              border: pw.TableBorder.all(color: borderColor, width: 0.6),
-
-              columnWidths: columnWidths,
-
-              defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
-
-              children: tableRows,
-            ),
-
-            // ======================================================
-            // Caption
-            // ======================================================
-            if (caption.isNotEmpty) ...[
-              pw.SizedBox(height: 5.0),
-
-              pw.Padding(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 4.0),
-
-                child: PdfTextHelper.buildText(
-                  fallbackFont: codeFontBundle.regular,
-                  caption,
-
-                  style: pw.TextStyle(
-                    font: fontBundle.fontForWeight(theme.fontWeight),
-                    fontSize: tableFontSize,
-                    color: const PdfColor.fromInt(0xFF64748B),
-                  ),
-
-                  textAlign: isRtl ? pw.TextAlign.right : pw.TextAlign.left,
-
-                  isRtl: isRtl,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+    return pw.Table(
+      border: pw.TableBorder.all(color: borderColor, width: 0.6),
+      columnWidths: columnWidths,
+      defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+      children: tableRows,
     );
   }
 
   // ==============================================================
-  // Parse Headers
+  // Parse Headers (تم استبعاد الفاصلة العربية "،" نهائياً)
   // ==============================================================
-
   List<String> _parseHeaders(dynamic data) {
     if (data == null) return [];
 
@@ -276,7 +161,6 @@ class PdfTableWidget extends pw.StatelessWidget {
             if (e is Map) {
               return (e['column_name'] ?? '').toString().trim();
             }
-
             return e.toString().trim();
           })
           .where((e) => e.isNotEmpty)
@@ -286,15 +170,13 @@ class PdfTableWidget extends pw.StatelessWidget {
     if (data is String && data.trim().isNotEmpty) {
       try {
         final decoded = jsonDecode(data);
-
         if (decoded is List) {
           return _parseHeaders(decoded);
         }
       } catch (_) {}
 
-      final delimiter = data.contains('|')
-          ? '|'
-          : (data.contains('،') ? '،' : ',');
+      // الاعتماد فقط على خط الأنابيب | أو الفاصلة الإنجليزية , واستبعاد الفاصلة العربية ،
+      final delimiter = data.contains('|') ? '|' : ',';
 
       return data
           .split(delimiter)
@@ -307,9 +189,8 @@ class PdfTableWidget extends pw.StatelessWidget {
   }
 
   // ==============================================================
-  // Parse Rows
+  // Parse Rows (تم استبعاد الفاصلة العربية "،" نهائياً)
   // ==============================================================
-
   List<List<String>> _parseRows(dynamic data) {
     if (data == null) return [];
 
@@ -324,10 +205,8 @@ class PdfTableWidget extends pw.StatelessWidget {
         }
 
         final str = item.toString().trim();
-
-        final delimiter = str.contains('|')
-            ? '|'
-            : (str.contains('،') ? '،' : ',');
+        // الاعتماد فقط على | أو , واستبعاد ،
+        final delimiter = str.contains('|') ? '|' : ',';
 
         return str.split(delimiter).map((c) => c.trim()).toList();
       }).toList();
@@ -336,7 +215,6 @@ class PdfTableWidget extends pw.StatelessWidget {
     if (data is String && data.trim().isNotEmpty) {
       try {
         final decoded = jsonDecode(data);
-
         if (decoded is List) {
           return _parseRows(decoded);
         }
@@ -347,9 +225,8 @@ class PdfTableWidget extends pw.StatelessWidget {
           .map((line) => line.trim())
           .where((line) => line.isNotEmpty)
           .map((line) {
-            final delimiter = line.contains('|')
-                ? '|'
-                : (line.contains('،') ? '،' : ',');
+            // الاعتماد فقط على | أو , واستبعاد ،
+            final delimiter = line.contains('|') ? '|' : ',';
 
             return line.split(delimiter).map((cell) => cell.trim()).toList();
           })

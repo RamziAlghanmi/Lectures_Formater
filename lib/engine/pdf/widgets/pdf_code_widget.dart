@@ -40,7 +40,7 @@ class PdfCodeWidget extends pw.StatelessWidget {
 
     final showLineNumbers = (node.fields['showLineNumbers'] as bool?) ?? true;
 
-    final codeFontSize = 12.0;
+    final codeFontSize = 10.5;
 
     const darkBackground = PdfColor.fromInt(0xFF1E1E1E);
     const headerBackground = PdfColor.fromInt(0xFF252526);
@@ -215,7 +215,7 @@ class PdfCodeWidget extends pw.StatelessWidget {
                   codeFont: codeFontBundle.regular,
                   arabicFont: fontBundle.regular,
 
-                  fontSize: codeFontSize * 1.1,
+                  fontSize: codeFontSize,
                 ),
               ),
             ),
@@ -224,41 +224,41 @@ class PdfCodeWidget extends pw.StatelessWidget {
       );
     }
 
-    // // 3. الشرح التوضيحي السفلي
-    // if (caption.isNotEmpty) {
-    //   rows.add(
-    //     pw.TableRow(
-    //       decoration: const pw.BoxDecoration(
-    //         color: headerBackground,
-    //         borderRadius: pw.BorderRadius.only(
-    //           bottomLeft: pw.Radius.circular(6.0),
-    //           bottomRight: pw.Radius.circular(6.0),
-    //         ),
-    //       ),
-    //       children: [
-    //         pw.SizedBox(),
-    //         pw.Directionality(
-    //           textDirection: pw.TextDirection.rtl,
-    //           child: pw.Container(
-    //             padding: const pw.EdgeInsets.symmetric(
-    //               horizontal: 8.0,
-    //               vertical: 4.0,
-    //             ),
-    //             alignment: pw.Alignment.centerRight,
-    //             child: pw.Text(
-    //               caption,
-    //               style: pw.TextStyle(
-    //                 font: fontBundle.regular,
-    //                 fontSize: baseFontSize * 0.8,
-    //                 color: const PdfColor.fromInt(0xFF94A3B8),
-    //               ),
-    //             ),
-    //           ),
-    //         ),
-    //       ],
-    //     ),
-    //   );
-    // }
+    // 3. الشرح التوضيحي السفلي
+    if (caption.isNotEmpty) {
+      rows.add(
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(
+            color: headerBackground,
+            borderRadius: pw.BorderRadius.only(
+              bottomLeft: pw.Radius.circular(6.0),
+              bottomRight: pw.Radius.circular(6.0),
+            ),
+          ),
+          children: [
+            pw.SizedBox(),
+            pw.Directionality(
+              textDirection: pw.TextDirection.rtl,
+              child: pw.Container(
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 8.0,
+                  vertical: 4.0,
+                ),
+                alignment: pw.Alignment.centerRight,
+                child: pw.Text(
+                  caption,
+                  style: pw.TextStyle(
+                    font: fontBundle.regular,
+                    fontSize: codeFontSize * 1.2,
+                    color: const PdfColor.fromInt(0xFF94A3B8),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return pw.Table(
       border: null,

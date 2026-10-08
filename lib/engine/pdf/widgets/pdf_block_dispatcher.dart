@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:lecture_formater/engine/pdf/pdf_text_helper.dart';
-import 'package:lecture_formater/engine/pdf/widgets/pdf_function_widget.dart';
+import 'package:lecture_formater/engine/pdf/widgets/pdf_comparsion_widget.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -108,22 +108,11 @@ class PdfBlockDispatcher {
 
       case BlockTypes.comparison:
         return [
-          _buildComparison(
-            node,
-            fontBundle,
-            themeConfig,
-            primaryPdfColor,
-            codeFontBundle,
-          ),
-        ];
-      case BlockTypes.functionDoc:
-        return [
-          PdfFunctionWidget(
+          PdfComparisonWidget(
             node: node,
-            theme: themeConfig,
             fonts: fontBundle,
+            theme: themeConfig,
             primaryColor: primaryPdfColor,
-            baseFontSize: themeConfig.baseFontSize,
             codeFontBundle: codeFontBundle,
           ),
         ];
@@ -207,61 +196,212 @@ class PdfBlockDispatcher {
     final bool isRtl = direction == pw.TextDirection.rtl;
     final widgets = <pw.Widget>[];
 
-    if (title.isNotEmpty) {
+    final titleStyle = pw.TextStyle(
+      font: fonts.bold,
+      fontSize: fontSize,
+      color: const PdfColor.fromInt(0xFF0F172A),
+    );
+
+    final contentStyle = pw.TextStyle(
+      font: fonts.fontForWeight(theme.fontWeight),
+      fontSize: fontSize,
+      color: const PdfColor.fromInt(0xFF334155),
+      lineSpacing: 2.0,
+    );
+
+    // تقسيم المحتوى إلى مقاطع صغيرة قابلة للتدفق عبر حدود الصفحات
+    final contentChunks = _splitIntoFlowableChunks(content);
+
+    // 1. حالة وجود عنوان ومحتوى معاً
+    if (title.isNotEmpty && contentChunks.isNotEmpty) {
+      // دمج العنوان مع المقطع الأول داخل Column لمنع انفصال العنوان في نهاية الصفحة
+      widgets.add(
+        pw.Directionality(
+          textDirection: direction,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            mainAxisSize: pw.MainAxisSize.min,
+            children: [
+              pw.Padding(
+                padding: pw.EdgeInsets.only(
+                  top: node.layoutRules.spaceBefore,
+                  bottom: 4.0,
+                  left: 8.0,
+                  right: 8.0,
+                ),
+                child: PdfTextHelper.buildText(
+                  fallbackFont: codeFontBundle.bold,
+                  title,
+                  style: titleStyle,
+                  isRtl: isRtl,
+                ),
+              ),
+              pw.Padding(
+                padding: pw.EdgeInsets.only(
+                  top: 0.0,
+                  bottom: contentChunks.length == 1
+                      ? node.layoutRules.spaceAfter
+                      : 6.0,
+                  left: isRtl ? 0.0 : 24.0,
+                  right: isRtl ? 24.0 : 0.0,
+                ),
+                child: PdfTextHelper.buildText(
+                  fallbackFont: codeFontBundle.regular,
+                  contentChunks.first,
+                  style: contentStyle,
+                  isRtl: isRtl,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // إضافة بقية المقاطع كعناصر مستقلة تتدفق بحرية عبر الصفحات
+      for (int i = 1; i < contentChunks.length; i++) {
+        final isLast = i == contentChunks.length - 1;
+        widgets.add(
+          pw.Directionality(
+            textDirection: direction,
+            child: pw.Padding(
+              padding: pw.EdgeInsets.only(
+                top: 0.0,
+                bottom: isLast ? node.layoutRules.spaceAfter : 6.0,
+                left: isRtl ? 0.0 : 24.0,
+                right: isRtl ? 24.0 : 0.0,
+              ),
+              child: PdfTextHelper.buildText(
+                fallbackFont: codeFontBundle.regular,
+                contentChunks[i],
+                style: contentStyle,
+                isRtl: isRtl,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    // 2. حالة وجود عنوان فقط بدون محتوى
+    else if (title.isNotEmpty) {
       widgets.add(
         pw.Directionality(
           textDirection: direction,
           child: pw.Padding(
             padding: pw.EdgeInsets.only(
               top: node.layoutRules.spaceBefore,
-              bottom: 4.0,
+              bottom: node.layoutRules.spaceAfter,
               left: 8.0,
               right: 8.0,
             ),
             child: PdfTextHelper.buildText(
               fallbackFont: codeFontBundle.bold,
               title,
-              style: pw.TextStyle(
-                font: fonts.bold,
-                fontSize: fontSize,
-                //  fontFallback: fonts.fontFallback,
-                color: const PdfColor.fromInt(0xFF0F172A),
-              ),
+              style: titleStyle,
               isRtl: isRtl,
             ),
           ),
         ),
       );
     }
-
-    if (content.isNotEmpty) {
-      widgets.add(
-        pw.Directionality(
-          textDirection: direction,
-          child: pw.Padding(
-            padding: pw.EdgeInsets.only(
-              top: title.isEmpty ? node.layoutRules.spaceBefore : 0.0,
-              bottom: node.layoutRules.spaceAfter,
-              left: isRtl ? 0.0 : 24.0,
-              right: isRtl ? 24.0 : 0.0,
-            ),
-            child: PdfTextHelper.buildText(
-              fallbackFont: codeFontBundle.regular,
-              content,
-              style: pw.TextStyle(
-                font: fonts.fontForWeight(theme.fontWeight),
-                fontSize: fontSize,
-                color: const PdfColor.fromInt(0xFF334155),
-                lineSpacing: 2.0,
+    // 3. حالة وجود محتوى فقط بدون عنوان
+    else if (contentChunks.isNotEmpty) {
+      for (int i = 0; i < contentChunks.length; i++) {
+        final isFirst = i == 0;
+        final isLast = i == contentChunks.length - 1;
+        widgets.add(
+          pw.Directionality(
+            textDirection: direction,
+            child: pw.Padding(
+              padding: pw.EdgeInsets.only(
+                top: isFirst ? node.layoutRules.spaceBefore : 0.0,
+                bottom: isLast ? node.layoutRules.spaceAfter : 6.0,
+                left: isRtl ? 0.0 : 24.0,
+                right: isRtl ? 24.0 : 0.0,
               ),
-              isRtl: isRtl,
+              child: PdfTextHelper.buildText(
+                fallbackFont: codeFontBundle.regular,
+                contentChunks[i],
+                style: contentStyle,
+                isRtl: isRtl,
+              ),
             ),
           ),
-        ),
-      );
+        );
+      }
     }
 
     return widgets;
+  }
+
+  /// تجزئة النصوص الطويلة إلى كتل آمنة لا تتجاوز حدود الصفحة
+  static List<String> _splitIntoFlowableChunks(String content) {
+    if (content.isEmpty) return [];
+
+    final rawLines = content.split('\n');
+    final List<String> chunks = [];
+
+    for (final rawLine in rawLines) {
+      final line = rawLine.trim();
+      if (line.isEmpty) continue;
+
+      // إذا كانت الفقرة قصيرة وطبيعية (أقل من 350 حرفاً تقريباً) تبقى كما هي
+      if (line.length <= 350) {
+        chunks.add(line);
+        continue;
+      }
+
+      // إذا كانت الفقرة طويلة جداً، تُجزأ استناداً إلى نهايات الجمل وعلامات الترقيم
+      final sentenceRegex = RegExp(r'[^.!?؟؛:]+[.!?؟؛:]?');
+      final matches = sentenceRegex.allMatches(line);
+
+      if (matches.isEmpty) {
+        _splitByWords(line, chunks);
+      } else {
+        final buffer = StringBuffer();
+        for (final match in matches) {
+          final sentence = match.group(0)!.trim();
+          if (sentence.isEmpty) continue;
+
+          if (buffer.length + sentence.length > 350) {
+            if (buffer.isNotEmpty) {
+              chunks.add(buffer.toString().trim());
+              buffer.clear();
+            }
+            if (sentence.length > 350) {
+              _splitByWords(sentence, chunks);
+            } else {
+              buffer.write('$sentence ');
+            }
+          } else {
+            buffer.write('$sentence ');
+          }
+        }
+        if (buffer.isNotEmpty) {
+          chunks.add(buffer.toString().trim());
+        }
+      }
+    }
+
+    return chunks.isNotEmpty ? chunks : [content];
+  }
+
+  static void _splitByWords(String text, List<String> chunks) {
+    final words = text.split(' ');
+    final buffer = StringBuffer();
+
+    for (final word in words) {
+      if (buffer.length + word.length > 300) {
+        if (buffer.isNotEmpty) {
+          chunks.add(buffer.toString().trim());
+          buffer.clear();
+        }
+      }
+      buffer.write('$word ');
+    }
+
+    if (buffer.isNotEmpty) {
+      chunks.add(buffer.toString().trim());
+    }
   }
 
   static List<pw.Widget> _buildListItems(
@@ -523,165 +663,6 @@ class PdfBlockDispatcher {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  static pw.Widget _buildComparison(
-    BlockNode node,
-    PdfFontBundle fonts,
-    DocumentThemeConfig theme,
-    PdfColor primaryColor,
-    PdfCodeFontBundle codeFontBundle,
-  ) {
-    final aTitle = (node.fields['itemATitle'] as String?)?.trim() ?? 'A';
-    final aContent = (node.fields['itemAContent'] as String?)?.trim() ?? '';
-    final bTitle = (node.fields['itemBTitle'] as String?)?.trim() ?? 'B';
-    final bContent = (node.fields['itemBContent'] as String?)?.trim() ?? '';
-    final direction = _getDirection(node);
-    final bool isRtl = direction == pw.TextDirection.rtl;
-
-    return pw.Directionality(
-      textDirection: direction,
-      child: pw.Container(
-        margin: pw.EdgeInsets.only(
-          top: node.layoutRules.spaceBefore,
-          bottom: node.layoutRules.spaceAfter,
-          left: 16.0,
-          right: 16.0,
-        ),
-        child: pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Expanded(
-              child: _buildComparisonBox(
-                title: aTitle,
-                content: aContent,
-                fonts: fonts,
-                theme: theme,
-                primaryColor: primaryColor,
-                isRtl: isRtl,
-                codeFontBundle: codeFontBundle,
-              ),
-            ),
-            pw.SizedBox(width: 10.0),
-            pw.Expanded(
-              child: _buildComparisonBox(
-                title: bTitle,
-                content: bContent,
-                fonts: fonts,
-                theme: theme,
-                primaryColor: primaryColor,
-                isRtl: isRtl,
-                codeFontBundle: codeFontBundle,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static pw.Widget _buildComparisonBox({
-    required String title,
-    required String content,
-    required PdfFontBundle fonts,
-    required DocumentThemeConfig theme,
-    required PdfColor primaryColor,
-    required bool isRtl,
-    required PdfCodeFontBundle codeFontBundle,
-  }) {
-    final lines = content
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n')
-        .split('\n')
-        .map((l) => l.trim())
-        .where((l) => l.isNotEmpty)
-        .toList();
-
-    final isMultiLine = lines.length > 1;
-
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(8.0),
-      decoration: pw.BoxDecoration(
-        color: const PdfColor.fromInt(0xFFF8FAFC),
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4.0)),
-        border: pw.Border.all(
-          color: const PdfColor.fromInt(0xFFCBD5E1),
-          width: 0.6,
-        ),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-        children: [
-          if (title.isNotEmpty) ...[
-            PdfTextHelper.buildText(
-              fallbackFont: codeFontBundle.bold,
-              title,
-              style: pw.TextStyle(
-                font: fonts.bold,
-                fontSize: theme.baseFontSize,
-                color: primaryColor,
-              ),
-              isRtl: isRtl,
-            ),
-            pw.SizedBox(height: 5.0),
-          ],
-          if (lines.isEmpty)
-            pw.SizedBox()
-          else if (!isMultiLine)
-            PdfTextHelper.buildText(
-              lines.first,
-              fallbackFont: codeFontBundle.regular,
-              style: pw.TextStyle(
-                font: fonts.fontForWeight(theme.fontWeight),
-                fontSize: theme.baseFontSize,
-                color: const PdfColor.fromInt(0xFF334155),
-                lineSpacing: 1.4,
-              ),
-              isRtl: isRtl,
-            )
-          else
-            ...lines.map((line) {
-              final cleanLine = line.replaceFirst(RegExp(r'^[•\-\*]\s*'), '');
-              return pw.Padding(
-                padding: const pw.EdgeInsets.symmetric(vertical: 1.5),
-                child: pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Padding(
-                      padding: pw.EdgeInsets.only(
-                        left: isRtl ? 4.0 : 0.0,
-                        right: isRtl ? 0.0 : 4.0,
-                        top: 1.0,
-                      ),
-                      child: pw.Text(
-                        '•',
-                        style: pw.TextStyle(
-                          font: fonts.fontForWeight(theme.fontWeight),
-                          fontSize: theme.baseFontSize * 0.9,
-                          color: primaryColor,
-                        ),
-                      ),
-                    ),
-                    pw.Expanded(
-                      child: PdfTextHelper.buildText(
-                        fallbackFont: codeFontBundle.regular,
-                        cleanLine,
-                        style: pw.TextStyle(
-                          font: fonts.fontForWeight(theme.fontWeight),
-                          fontSize: theme.baseFontSize * 0.9,
-                          color: const PdfColor.fromInt(0xFF334155),
-                          lineSpacing: 1.3,
-                        ),
-                        isRtl: isRtl,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
       ),
     );
   }
